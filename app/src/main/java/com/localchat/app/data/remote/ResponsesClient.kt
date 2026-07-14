@@ -6,8 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -18,20 +16,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 class ResponsesClient(private val client: OkHttpClient = OkHttpClient()) {
     fun stream(endpoint: String, apiKey: String, model: String, messages: List<ChatMessage>, imageDataUrl: String?): Flow<String> = flow {
-        val input = buildJsonArray {
-            messages.forEach { message ->
-                add(buildJsonObject {
-                    put("role", JsonPrimitive(if (message.role == MessageRole.USER) "user" else "assistant"))
-                    put("content", buildJsonArray {
-                        add(buildJsonObject { put("type", JsonPrimitive("input_text")); put("text", JsonPrimitive(message.text)) })
-                        if (message.id == messages.last().id && imageDataUrl != null) add(buildJsonObject {
-                            put("type", JsonPrimitive("input_image")); put("image_url", JsonPrimitive(imageDataUrl))
-                        })
-                    })
-                })
-            }
-        }
-        val payload = JsonObject(mapOf("model" to JsonPrimitive(model), "stream" to JsonPrimitive(true), "input" to input)).toString()
+        val payload = ResponsesRequestBuilder.build(model, messages, imageDataUrl)
         val request = Request.Builder().url(endpoint.trimEnd('/') + "/responses")
             .header("Authorization", "Bearer $apiKey")
             .header("Content-Type", "application/json")
@@ -48,4 +33,34 @@ class ResponsesClient(private val client: OkHttpClient = OkHttpClient()) {
             }
         }
     }.flowOn(Dispatchers.IO)
+}
+
+internal object ResponsesRequestBuilder {
+    fun build(model: String, messages: List<ChatMessage>, imageDataUrl: String?): String =
+        buildJsonObject {
+            put("model", JsonPrimitive(model))
+            put("stream", JsonPrimitive(true))
+            put("input", buildJsonArray {
+                messages.forEachIndexed { index, message ->
+                    add(buildJsonObject {
+                        put("role", JsonPrimitive(if (message.role == MessageRole.USER) "user" else "assistant"))
+                        put("content", buildJsonArray {
+                            add(buildJsonObject {
+                                put(
+                                    "type",
+                                    JsonPrimitive(if (message.role == MessageRole.USER) "input_text" else "output_text"),
+                                )
+                                put("text", JsonPrimitive(message.text))
+                            })
+                            if (index == messages.lastIndex && message.role == MessageRole.USER && imageDataUrl != null) {
+                                add(buildJsonObject {
+                                    put("type", JsonPrimitive("input_image"))
+                                    put("image_url", JsonPrimitive(imageDataUrl))
+                                })
+                            }
+                        })
+                    })
+                }
+            })
+        }.toString()
 }
