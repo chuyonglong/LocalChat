@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -68,6 +69,9 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -77,6 +81,8 @@ import com.localchat.app.domain.QuickConfigImport
 import com.localchat.app.domain.ApiKeyMask
 import com.localchat.app.domain.ApiEndpointMask
 import com.localchat.app.domain.ThemeMode
+import com.localchat.app.domain.MarkdownBlock
+import com.localchat.app.domain.MarkdownDocument
 import com.localchat.app.ui.AppRoute
 import kotlinx.coroutines.launch
 
@@ -481,6 +487,7 @@ private fun HomePreview() {
 
 @Composable
 internal fun MessageList(messages: List<MessageEntity>, modifier: Modifier) {
+    val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
     LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
@@ -502,20 +509,36 @@ internal fun MessageList(messages: List<MessageEntity>, modifier: Modifier) {
                         color = MaterialTheme.colorScheme.primaryContainer,
                         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                     ) {
-                        Text(
-                            message.content,
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
+                        Row(verticalAlignment = Alignment.Top) {
+                            Text(message.content, Modifier.weight(1f).padding(start = 14.dp, top = 10.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyLarge)
+                            IconButton({ clipboard.setText(AnnotatedString(message.content)) }) { Icon(Icons.Default.ContentCopy, "复制消息") }
+                        }
                     }
                 } else {
-                    Text(
-                        message.content,
-                        Modifier.widthIn(max = 340.dp),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
+                    MarkdownMessage(message.content, Modifier.widthIn(max = 340.dp), clipboard::setText)
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun MarkdownMessage(content: String, modifier: Modifier, copy: (AnnotatedString) -> Unit) = Column(modifier) {
+    MarkdownDocument.parse(content).blocks.forEach { block ->
+        when (block) {
+            is MarkdownBlock.Heading -> Text(block.text, style = if (block.level <= 2) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.titleMedium)
+            is MarkdownBlock.Paragraph -> Text(block.text, style = MaterialTheme.typography.bodyLarge)
+            is MarkdownBlock.ListItem -> Text("• ${block.text}")
+            is MarkdownBlock.TaskItem -> Text("${if (block.checked) "☑" else "☐"} ${block.text}")
+            is MarkdownBlock.Quote -> Text(block.blocks.joinToString("\n") { it.toString() }, modifier = Modifier.padding(start = 12.dp))
+            is MarkdownBlock.Table -> block.rows.forEach { Text(it.joinToString(" | "), fontFamily = FontFamily.Monospace) }
+            is MarkdownBlock.Code -> Surface(Modifier.fillMaxWidth().padding(vertical = 4.dp), shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                Column(Modifier.padding(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) { Text(block.language.name.lowercase(), Modifier.weight(1f)); IconButton({ copy(AnnotatedString(block.content)) }) { Icon(Icons.Default.ContentCopy, "复制代码") } }
+                    Text(block.content, fontFamily = FontFamily.Monospace)
+                }
+            }
+            MarkdownBlock.Rule -> HorizontalDivider()
         }
     }
 }
