@@ -17,6 +17,7 @@ import com.localchat.app.domain.ApiConfiguration
 import com.localchat.app.domain.ChatMessage
 import com.localchat.app.domain.ConversationContext
 import com.localchat.app.domain.MessageRole
+import com.localchat.app.domain.MessageFormatting
 import com.localchat.app.domain.ThemeMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -70,13 +71,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteConversation(id: String) = viewModelScope.launch { dao.deleteConversation(id); if (_currentId.value == id) newConversation() }
 
     fun send(text: String, image: Uri?) = viewModelScope.launch {
+        val normalizedText = MessageFormatting.normalizeForSend(text)
         val endpoint = settings.endpoint; val key = settings.apiKey; val model = settings.model
         if (endpoint.isBlank() || key.isBlank() || model.isBlank()) { _error.value = "请先在设置中填写服务地址、API Key 和模型"; return@launch }
         val id = _currentId.value ?: UUID.randomUUID().toString().also { _currentId.value = it }
         val now = System.currentTimeMillis(); val userId = UUID.randomUUID().toString()
-        dao.saveConversation(ConversationEntity(id, text.ifBlank { "图片对话" }.take(30), now))
-        dao.saveMessage(MessageEntity(userId, id, "USER", text, image?.toString(), now))
-        _messages.value = _messages.value + MessageEntity(userId, id, "USER", text, image?.toString(), now)
+        dao.saveConversation(ConversationEntity(id, normalizedText.ifBlank { "图片对话" }.take(30), now))
+        dao.saveMessage(MessageEntity(userId, id, "USER", normalizedText, image?.toString(), now))
+        _messages.value = _messages.value + MessageEntity(userId, id, "USER", normalizedText, image?.toString(), now)
         _isSending.value = true; _error.value = null
         val assistantId = UUID.randomUUID().toString(); var reply = ""
         try {
