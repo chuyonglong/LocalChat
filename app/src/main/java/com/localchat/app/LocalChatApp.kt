@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -479,8 +480,16 @@ private fun HomePreview() {
 }
 
 @Composable
-private fun MessageList(messages: List<MessageEntity>, modifier: Modifier) =
-    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+internal fun MessageList(messages: List<MessageEntity>, modifier: Modifier) {
+    val listState = rememberLazyListState()
+    LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
+        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    }
+    LazyColumn(
+        modifier,
+        state = listState,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
         items(messages) { message ->
             Row(
                 Modifier.fillMaxWidth(),
@@ -509,6 +518,7 @@ private fun MessageList(messages: List<MessageEntity>, modifier: Modifier) =
             }
         }
     }
+}
 
 @Composable
 private fun Composer(
@@ -530,8 +540,8 @@ private fun Composer(
             .fillMaxWidth()
             .align(Alignment.BottomCenter),
         shape = RoundedCornerShape(32.dp),
-        color = Color(0xFF211E27),
-        border = BorderStroke(1.dp, Color(0xFF9E98A9)),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         tonalElevation = 3.dp,
     ) {
         Row(
