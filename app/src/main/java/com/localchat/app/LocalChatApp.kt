@@ -498,9 +498,7 @@ internal fun MessageList(messages: List<MessageEntity>, sending: Boolean = false
     val scope = rememberCoroutineScope()
     val atBottom by remember {
         derivedStateOf {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull()?.index
-            last != null && last >= info.totalItemsCount - 1
+            !listState.canScrollForward
         }
     }
     var followLatest by remember { mutableStateOf(true) }
@@ -521,15 +519,21 @@ internal fun MessageList(messages: List<MessageEntity>, sending: Boolean = false
                 horizontalArrangement = if (message.role == "USER") Arrangement.End else Arrangement.Start
             ) {
                 if (message.role == "USER") {
-                    Surface(
-                        modifier = Modifier.widthIn(max = 340.dp),
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    ) {
-                        Row(verticalAlignment = Alignment.Top) {
-                            Text(message.content, Modifier.weight(1f).padding(start = 14.dp, top = 10.dp, bottom = 10.dp), style = MaterialTheme.typography.bodyLarge)
-                            IconButton({ clipboard.setText(AnnotatedString(message.content)) }) { Icon(Icons.Default.ContentCopy, "复制消息") }
+                    Column(horizontalAlignment = Alignment.End) {
+                        Surface(
+                            modifier = Modifier.widthIn(max = 340.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ) {
+                            Text(
+                                message.content,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.bodyLarge,
+                            )
+                        }
+                        IconButton({ clipboard.setText(AnnotatedString(message.content)) }) {
+                            Icon(Icons.Default.ContentCopy, "复制消息")
                         }
                     }
                 } else {
@@ -543,7 +547,7 @@ internal fun MessageList(messages: List<MessageEntity>, sending: Boolean = false
         IconButton(
             onClick = {
                 scope.launch {
-                    if (!atBottom) listState.animateScrollToItem(messages.lastIndex)
+                    if (!atBottom) listState.animateScrollToItem(messages.lastIndex, Int.MAX_VALUE)
                     else listState.animateScrollToItem(messages.lastIndex)
                 }
             },
