@@ -28,3 +28,7 @@ LocalChat 是单模块 Android 应用。业务代码位于 `app/src/main/java/co
 ## 安全与视觉资源
 
 API Key 必须经应用的安全设置流程保存，不得出现在日志、截图、测试夹具或测试数据中。新增应用图标或界面图标时，优先使用 [Iconfont](https://www.iconfont.cn/) 或 [Material Symbols Rounded](https://fonts.google.com/icons?icon.query=music&icon.style=Rounded)，并确认许可与视觉风格一致。
+
+
+## 提交代码
+\提交记录使用中文
