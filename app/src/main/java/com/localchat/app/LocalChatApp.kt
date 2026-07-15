@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
@@ -60,7 +62,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -83,6 +87,7 @@ import com.localchat.app.domain.ApiEndpointMask
 import com.localchat.app.domain.ThemeMode
 import com.localchat.app.domain.MarkdownBlock
 import com.localchat.app.domain.MarkdownDocument
+import com.localchat.app.domain.ScrollFollowPolicy
 import com.localchat.app.ui.AppRoute
 import kotlinx.coroutines.launch
 
@@ -409,6 +414,7 @@ private fun ChatScreen(vm: ChatViewModel, onOpenDrawer: () -> Unit) {
         ) {
             if (messages.isEmpty()) EmptyChat(Modifier.fillMaxSize()) else MessageList(
                 messages,
+                sending,
                 Modifier
                     .fillMaxSize()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -486,17 +492,29 @@ private fun HomePreview() {
 }
 
 @Composable
-internal fun MessageList(messages: List<MessageEntity>, modifier: Modifier) {
+internal fun MessageList(messages: List<MessageEntity>, sending: Boolean = false, modifier: Modifier) {
     val clipboard = LocalClipboardManager.current
     val listState = rememberLazyListState()
-    LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+    val scope = rememberCoroutineScope()
+    val atBottom by remember {
+        derivedStateOf {
+            val info = listState.layoutInfo
+            val last = info.visibleItemsInfo.lastOrNull()?.index
+            last != null && last >= info.totalItemsCount - 1
+        }
     }
-    LazyColumn(
-        modifier,
-        state = listState,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    var followLatest by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { atBottom }.collect { if (!it) followLatest = false else followLatest = true }
+    }
+    LaunchedEffect(messages.size, messages.lastOrNull()?.content) {
+        val userMessageAdded = messages.lastOrNull()?.role == "USER"
+        if (messages.isNotEmpty() && ScrollFollowPolicy.shouldFollow(sending, followLatest, userMessageAdded)) {
+            listState.animateScrollToItem(messages.lastIndex)
+        }
+    }
+    Box(modifier) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         items(messages) { message ->
             Row(
                 Modifier.fillMaxWidth(),
@@ -519,6 +537,21 @@ internal fun MessageList(messages: List<MessageEntity>, modifier: Modifier) {
                 }
             }
         }
+    }
+    val lastAssistant = messages.lastOrNull()?.role == "ASSISTANT"
+    if (!atBottom || (!sending && lastAssistant)) {
+        IconButton(
+            onClick = {
+                scope.launch {
+                    if (!atBottom) listState.animateScrollToItem(messages.lastIndex)
+                    else listState.animateScrollToItem(messages.lastIndex)
+                }
+            },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).testTag(if (!atBottom) "scroll-to-bottom" else "scroll-to-answer-start"),
+        ) {
+            Icon(if (!atBottom) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward, if (!atBottom) "回到最新消息" else "回到当前回答开始")
+        }
+    }
     }
 }
 
